@@ -1,60 +1,58 @@
 # Public ingress: getting recruiter traffic to a Mac mini safely
 
-Design goal: **zero open inbound ports** on the home network, TLS everywhere,
-DDoS absorption at the edge, and a monthly bill measured in cents. Below are
-the two options I evaluated, the way you'd write it up in a design doc.
+Design goals: **zero open inbound ports at home**, TLS everywhere (mandatory —
+`.dev` is HSTS-preloaded), every layer as code, and a bill a job-seeker can
+ignore. Two options were evaluated; the all-AWS path is deployed.
 
-## Option A (deployed): Route 53 + Cloudflare Tunnel — ~$0.50/mo
-
-```
-recruiter → miniai.yourdomain.com
-          → Route 53 (DNS, $0.50/mo hosted zone)
-          → Cloudflare edge (TLS termination, WAF, DDoS absorption, free tier)
-          → cloudflared tunnel (OUTBOUND-only connection from the mini)
-          → gateway :8000 (auth, rate limit, queue)  →  mlx_lm.server :8080
-```
-
-Why it wins:
-- The mini makes an *outbound* connection to Cloudflare; nothing on the home
-  router is exposed. No port forwarding, no dynamic-DNS hacks, no attack surface.
-- Free TLS, HTTP/2, caching of static assets, and IP-level rate limiting at
-  the edge — before traffic ever reaches the house.
-- Route 53 stays the DNS source of truth (NS-delegated subdomain or full zone),
-  which keeps the AWS skills visible and makes it trivial to swap edges later.
-
-Setup:
-```bash
-brew install cloudflared
-cloudflared tunnel login
-cloudflared tunnel create miniai
-cloudflared tunnel route dns miniai miniai.yourdomain.com
-cloudflared tunnel run --config deploy/cloudflared.yml miniai
-```
-
-## Option B (evaluated, documented): all-AWS with a Lightsail bastion — ~$5/mo
+## Option A (deployed): all-AWS — Route 53 + Lightsail bastion + WireGuard, ~$5.50/mo
 
 ```
-recruiter → Route 53 → Lightsail nano ($3.50/mo, static IP)
-          → nginx (TLS via ACM/certbot, rate limiting)
-          → WireGuard tunnel → Mac mini gateway :8000
+recruiter → Route 53 hosted zone ($0.50/mo)
+          → Lightsail nano static IP (~$5/mo)
+            nginx: Let's Encrypt TLS, edge rate limiting, reverse proxy
+          → WireGuard (UDP 51820) ◀── OUTBOUND-only connection from the mini
+          → gateway 10.8.0.2:8000 → mlx_lm.server :8080
 ```
 
-- The mini keeps zero inbound ports (WireGuard peers outbound to the bastion).
-- More moving parts you own: nginx config, WireGuard keys, patching the bastion.
-- Choose this if the goal is to demonstrate hands-on EC2/nginx/WireGuard work;
-  the config lives in `deploy/bastion/` as a documented alternative.
+- The mini's WireGuard client dials **out** to the bastion and holds the
+  tunnel open (`PersistentKeepalive`) — the home network exposes nothing.
+- All public attack surface lives on a $5 box that Terraform can rebuild in
+  two minutes (`terraform/lightsail.tf`: instance, static IP, firewall ports,
+  DNS records — the whole edge is code).
+- Owned trade-offs, stated plainly: TLS renewal (certbot systemd timer),
+  nginx and OS patching, and DDoS absorption that is one nano instance rather
+  than a global anycast network. The gateway's own rate limiting and load
+  shedding carry real weight in this design.
 
-## What I deliberately did NOT use
+Setup runbook: `deploy/bastion/BASTION.md`.
 
-- **ALB/NLB (~$16+/mo):** load-balancing a single origin is resume theater.
-  The write-up says so; interviewers respect the cost reasoning more than the logo.
-- **API Gateway + VPN:** per-request pricing plus a managed VPN attachment is
-  wildly over-spec for one host. Same skills are demonstrated by the gateway code.
+## Option B (evaluated, documented): Cloudflare Tunnel — $0/mo
 
-## Defense in depth (either option)
+```
+recruiter → Cloudflare edge (TLS, WAF, DDoS absorption, free tier)
+          → cloudflared (outbound-only from the mini) → gateway :8000
+```
 
-1. Edge: TLS, DDoS absorption, coarse IP rate limits
-2. Tunnel: outbound-only, authenticated, encrypted
-3. Gateway: bearer-token auth (optional), 6 req/min/IP, bounded queue (503s > OOM)
+Cheaper and less to maintain — Cloudflare terminates TLS and absorbs DDoS for
+free, and there is no bastion to patch. The costs are architectural: DNS must
+be served by Cloudflare nameservers (Route 53 demoted to registrar), a
+closed-source daemon runs on the mini, and a third party sits in the TLS
+path. Config kept in `deploy/cloudflared.yml`; swapping edges is a one-hour
+change precisely because the gateway never knows which edge is in front of it.
+
+## Why not the "obvious" AWS answers
+
+- **ALB/NLB (~$16+/mo):** load-balancing a single origin is resume theater —
+  and it still can't reach a home network without a tunnel or VPN attachment.
+- **API Gateway + Site-to-Site VPN:** per-request pricing plus ~$36/mo for the
+  VPN attachment, to serve one host. The same skills show up in the gateway
+  code for free.
+
+## Defense in depth (as deployed)
+
+1. Edge (bastion): TLS, HSTS, nginx rate limiting (30 req/min/IP, burst 10)
+2. Tunnel: WireGuard — outbound-only from home, modern crypto, 25s keepalive
+3. Gateway: optional bearer auth, 6 req/min/IP, bounded queue (503s > OOM)
 4. Agent: read-only allowlisted tools, no shell, hard cap on tool-call loops
-5. Host: gateway and model server bind 127.0.0.1 only; macOS firewall on
+5. Host: gateway and model server bind localhost + WireGuard interface only;
+   macOS firewall on; AWS credential scoped to one SSM parameter path

@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!-- WireGuard client as a system LaunchDaemon (wg-quick needs root).
+     Install per deploy/bastion/BASTION.md step 4. Adjust the config path. -->
+<plist version="1.0">
+<dict>
+  <key>Label</key><string>com.miniai.wireguard</string>
+  <key>ProgramArguments</key>
+  <array>
+    <string>/opt/homebrew/bin/wg-quick</string>
+    <string>up</string>
+    <string>/etc/wireguard/wg0.conf</string>
+  </array>
+  <key>RunAtLoad</key><true/>
+  <key>StandardOutPath</key><string>/var/log/miniai-wireguard.log</string>
+  <key>StandardErrorPath</key><string>/var/log/miniai-wireguard.log</string>
+</dict>
+</plist>

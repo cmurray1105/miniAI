@@ -13,7 +13,10 @@
     <string>uvicorn</string>
     <string>server.gateway:app</string>
     <string>--host</string>
-    <string>127.0.0.1</string>
+    <!-- 0.0.0.0 so the bastion can reach us over the WireGuard interface
+         (10.8.0.2). The mlx model server stays on 127.0.0.1 — only the
+         gateway is tunnel-facing. Keep the macOS firewall on. -->
+    <string>0.0.0.0</string>
     <string>--port</string>
     <string>8000</string>
   </array>

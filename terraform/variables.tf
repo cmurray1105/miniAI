@@ -33,7 +33,7 @@ variable "require_auth" {
 # --- DNS (optional) ------------------------------------------------------------
 
 variable "domain_name" {
-  description = "Apex domain for the demo (empty string skips all Route 53 resources)"
+  description = "Apex domain for the demo (empty string skips DNS + bastion)"
   type        = string
-  default     = ""
+  default     = "mini-agent.dev"
 }

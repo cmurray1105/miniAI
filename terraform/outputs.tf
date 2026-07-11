@@ -17,5 +17,5 @@ output "config_parameter_path" {
 }
 
 output "route53_zone_name_servers" {
-  value = var.domain_name != "" ? aws_route53_zone.main[0].name_servers : []
+  value = var.domain_name != "" ? data.aws_route53_zone.main[0].name_servers : []
 }

@@ -1,30 +1,32 @@
-# Optional DNS layer. Set domain_name to enable; leave "" to skip.
+# DNS: Route 53 hosted zone as the source of truth, records pointing at the
+# Lightsail bastion's static IP. Set domain_name to enable.
 #
-# Honest architecture note: Cloudflare Tunnel requires its hostname's zone to
-# be served by Cloudflare nameservers (free tier doesn't do partial/subdomain
-# zones). So the working pattern with a Route 53-registered domain is:
-#   Route 53 = registrar + this hosted zone as source of truth,
-#   with NS delegation pointing the zone at Cloudflare (var below).
-# If you skip Cloudflare and use the Lightsail bastion (deploy/EDGE.md
-# option B), point the A record at the bastion's static IP instead.
+# The zone from domain registration is looked up, not created — if you deleted
+# it, recreate it first (Route 53 -> Hosted zones -> Create), then update the
+# nameservers under Registered domains to the new zone's NS values (every
+# fresh zone is assigned a different NS set).
 
-variable "cloudflare_name_servers" {
-  description = "Cloudflare-assigned NS for the zone (from the Cloudflare dashboard); empty list = no delegation"
-  type        = list(string)
-  default     = []
-}
-
-resource "aws_route53_zone" "main" {
+data "aws_route53_zone" "main" {
   count = var.domain_name != "" ? 1 : 0
   name  = var.domain_name
 }
 
-resource "aws_route53_record" "cloudflare_delegation" {
-  count = var.domain_name != "" && length(var.cloudflare_name_servers) > 0 ? 1 : 0
+resource "aws_route53_record" "apex" {
+  count = var.domain_name != "" ? 1 : 0
 
-  zone_id = aws_route53_zone.main[0].zone_id
+  zone_id = data.aws_route53_zone.main[0].zone_id
   name    = var.domain_name
-  type    = "NS"
-  ttl     = 172800
-  records = var.cloudflare_name_servers
+  type    = "A"
+  ttl     = 300
+  records = [aws_lightsail_static_ip.bastion[0].ip_address]
+}
+
+resource "aws_route53_record" "grafana" {
+  count = var.domain_name != "" ? 1 : 0
+
+  zone_id = data.aws_route53_zone.main[0].zone_id
+  name    = "grafana.${var.domain_name}"
+  type    = "A"
+  ttl     = 300
+  records = [aws_lightsail_static_ip.bastion[0].ip_address]
 }

@@ -20,16 +20,14 @@ terraform {
     }
   }
 
-  # Remote state: uncomment after creating the bucket (one-time bootstrap).
-  # S3-backed state with locking is the production habit worth demonstrating,
-  # even for a project this size.
-  #
-  # backend "s3" {
-  #   bucket       = "YOURNAME-miniai-tfstate"
-  #   key          = "miniai/terraform.tfstate"
-  #   region       = "us-east-1"
-  #   use_lockfile = true   # S3-native state locking (no DynamoDB table needed)
-  # }
+  # Remote state: versioned S3 bucket (created one-time by hand — the classic
+  # backend chicken-and-egg). Secrets in state stay out of git entirely.
+  backend "s3" {
+    bucket       = "cmurray-miniai-tfstate"
+    key          = "miniai/terraform.tfstate"
+    region       = "us-east-1"
+    use_lockfile = true # S3-native state locking (no DynamoDB table needed)
+  }
 }
 
 provider "aws" {

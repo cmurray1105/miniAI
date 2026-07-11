@@ -4,7 +4,8 @@
 Qwen3.5-9B into an SRE incident copilot, served publicly behind a real
 gateway — auth, rate limiting, load shedding, Prometheus/Grafana, supervised
 services, CI, and zero open inbound ports. Total cloud compute cost: **$0**.
-Total cloud bill: **~$0.50/month** (a Route 53 hosted zone).
+Total recurring bill: **~$5.50/month** (Lightsail nano edge bastion + Route 53
+hosted zone) plus ~$12/yr for the domain. Every AWS resource is Terraform-managed.
 
 This is not an "AI is magic" demo. It's the full lifecycle you'd run in
 production — train → eval → serve → observe → secure — scaled honestly to
@@ -12,8 +13,9 @@ one 16 GB host, with every trade-off written down.
 
 ```
                         ┌────────────────────────── Mac mini (16 GB) ──────────────────────────┐
- recruiter ─▶ Route 53 ─▶ Cloudflare edge ─▶ cloudflared (outbound-only tunnel)                │
-              (DNS)       (TLS, WAF, DDoS)   │                                                 │
+ recruiter ─▶ Route 53 ─▶ Lightsail bastion ─▶ WireGuard (outbound-only from mini)            │
+              (DNS)       (nginx · TLS ·      │                                                │
+                           edge rate limit)   │                                                │
                                              ▼                                                 │
                                         gateway :8000 ────────▶ mlx_lm.server :8080            │
                                         auth · rate limit ·     Qwen3.5-9B-4bit                │
@@ -80,8 +82,8 @@ make eval-report          # side-by-side deltas
 make serve-gateway        # gateway + web UI on :8000
 make obs-up               # Prometheus :9090, Grafana :3000
 
-# 6. go public (see deploy/EDGE.md for the design discussion)
-make tunnel
+# 6. go public (one-time bastion setup: deploy/bastion/BASTION.md)
+make tunnel          # WireGuard up to the AWS edge
 ```
 
 Try it locally at `http://localhost:8000` — the UI shows every tool call the
@@ -135,10 +137,11 @@ internet. Allowlisted diagnostics only (metrics, disk, logs, DNS, HTTP
 probes, PromQL), no shell, hard cap of 6 tool rounds. The model was also
 *trained* to refuse write actions — and the eval measures it.
 
-**Why Cloudflare Tunnel if you know AWS?** Because an ALB in front of a
-single home server is resume theater. The trade study — including the
-all-AWS Lightsail/WireGuard alternative I documented — is in
-`deploy/EDGE.md`. Route 53 remains the DNS layer.
+**Why a $5 Lightsail bastion instead of an ALB?** An ALB in front of a single
+origin is resume theater at 3x the price — and it still can't reach a home
+network. The bastion (nginx TLS + WireGuard, fully Terraform-managed) keeps
+every hop on AWS with zero inbound ports at home. The trade study, including
+the Cloudflare Tunnel alternative, is in `deploy/EDGE.md`.
 
 **What breaks first under load?** Queue depth. Watch `gateway_queue_depth`
 in Grafana; sustained >4 means past capacity, and the load-shedding 503s are
@@ -164,5 +167,5 @@ tests/        platform tests + dataset invariants (run in CI, no GPU needed)
 ## Stack
 
 MLX / mlx-lm · Qwen3.5-9B (4-bit) · FastAPI · Terraform · Ansible ·
-SSM Parameter Store · Prometheus · Grafana · Cloudflare Tunnel · Route 53 ·
-launchd · GitHub Actions
+SSM Parameter Store · Prometheus · Grafana · Route 53 · Lightsail · nginx ·
+WireGuard · launchd · GitHub Actions
