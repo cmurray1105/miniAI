@@ -1,7 +1,8 @@
 # miniAI — every workflow is one make target away.
 
 .PHONY: setup dataset train eval-base eval-tuned eval-report serve-model \
-        serve-model-tuned serve-gateway obs-up obs-down tunnel test lint chat
+        serve-model-tuned serve-gateway obs-up obs-down obs-docker-up \
+        infra-plan infra-apply provision tunnel tunnel-cf test lint chat
 
 setup:            ## install runtime deps (on the Mac mini)
 	pip install -r requirements.txt
@@ -28,8 +29,8 @@ eval-tuned:
 eval-report:      ## side-by-side: what did the fine-tune buy us?
 	python eval/run_eval.py --compare eval/results-base.json eval/results-tuned.json
 
-serve-gateway:    ## public-facing gateway on :8000
-	uvicorn server.gateway:app --host 127.0.0.1 --port 8000
+serve-gateway:    ## gateway on :8000 (launchd normally owns this; manual run for dev)
+	uvicorn server.gateway:app --host 0.0.0.0 --port 8000
 
 chat:             ## local REPL against the agent
 	python -m agent.agent
@@ -43,7 +44,19 @@ obs-down:
 obs-docker-up:    ## Docker alternative — costs a 2-8 GB VM on macOS; avoid on 16 GB
 	docker compose -f observability/docker-compose.yml up -d
 
-tunnel:           ## public ingress (see deploy/EDGE.md)
+infra-plan:       ## preview AWS changes (SSM config, IAM, bastion, DNS)
+	cd terraform && terraform init && terraform plan
+
+infra-apply:      ## apply the AWS layer
+	cd terraform && terraform apply
+
+provision:        ## idempotent host setup (deps, launchd services, observability)
+	ansible-playbook ansible/site.yml
+
+tunnel:           ## WireGuard up to the AWS bastion (see deploy/bastion/BASTION.md)
+	sudo wg-quick up /etc/wireguard/wg0.conf
+
+tunnel-cf:        ## Cloudflare alternative (see deploy/EDGE.md option B)
 	cloudflared tunnel run --config deploy/cloudflared.yml miniai
 
 test:
