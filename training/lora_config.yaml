@@ -1,0 +1,44 @@
+# miniAI QLoRA config — tuned for a 16 GB Mac mini.
+#
+# Because the base model is already 4-bit quantized, mlx-lm automatically
+# trains QLoRA: the base stays frozen+quantized, only the LoRA adapters
+# (a fraction of a percent of the weights) are trained in full precision.
+#
+# Run:  mlx_lm.lora --config training/lora_config.yaml
+# Expect roughly 1-2 hours on an M-series mini. Close memory-hungry apps first.
+
+model: "mlx-community/Qwen3.5-9B-MLX-4bit"
+train: true
+data: "data"                 # expects train.jsonl / valid.jsonl / test.jsonl
+adapter_path: "adapters/incident-copilot-v1"
+
+# --- memory budget: 16 GB total, ~5.5 GB base model -------------------------
+batch_size: 1                # smallest possible; compensate with grad accumulation
+grad_accumulation_steps: 4   # effective batch of 4 without the memory cost
+num_layers: 8                # adapt only the top 8 transformer layers
+grad_checkpoint: true        # trade compute for memory on the backward pass
+max_seq_length: 1600         # trajectories incl. tool specs fit under this
+
+# --- optimization ------------------------------------------------------------
+iters: 800                   # ~8 effective epochs over 376 examples
+learning_rate: 1.0e-5
+lr_schedule:
+  name: cosine_decay
+  warmup: 50
+  arguments: [1.0e-5, 800, 1.0e-6]
+
+# Compute loss only on assistant tokens, not the prompt — we're teaching
+# output behavior, not prompt memorization.
+mask_prompt: true
+
+lora_parameters:
+  rank: 8
+  scale: 16.0
+  dropout: 0.05
+
+# --- cadence ------------------------------------------------------------------
+steps_per_report: 20
+steps_per_eval: 100          # validation loss every 100 steps
+save_every: 200              # checkpoint adapters (cheap: adapters are ~20 MB)
+val_batches: 25
+seed: 1105

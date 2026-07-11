@@ -1,0 +1,27 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Lint
+        run: ruff check .
+      - name: Unit tests (gateway, agent parsing, dataset invariants)
+        run: pytest -q
+      - name: Dataset reproducibility gate
+        run: python data/generate_dataset.py --out /tmp/ds && wc -l /tmp/ds/*.jsonl
+
+  # MLX needs Apple Silicon; macOS runners are billed by the minute on private
+  # repos, so training itself stays on the mini. CI validates everything that
+  # doesn't need Metal: the platform code, the dataset, and the contracts.

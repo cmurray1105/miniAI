@@ -1,0 +1,162 @@
+# miniAI host provisioning — idempotent setup of the Mac mini.
+#
+#   ansible-playbook ansible/site.yml
+#
+# Honest framing for interviewers: with one host, Ansible isn't about fleet
+# management — it's about *provisioning as code*. Rebuilding this mini from a
+# fresh macOS install is one command instead of a README of manual steps, and
+# every change to the host's configuration is a reviewable diff. The plists
+# are Jinja2 templates, so paths and usernames are derived, not hand-edited.
+
+- name: Provision miniAI on the local Mac mini
+  hosts: localhost
+  connection: local
+  gather_facts: true
+
+  vars:
+    miniai_dir: "{{ playbook_dir | dirname }}"
+    miniai_user: "{{ ansible_user_id }}"
+    python_bin: "{{ ansible_python.executable }}"
+    launch_agents_dir: "{{ ansible_env.HOME }}/Library/LaunchAgents"
+    model_repo: "mlx-community/Qwen3.5-9B-MLX-4bit"
+    adapter_path: "adapters/incident-copilot-v1"
+    services:
+      - com.miniai.mlx-server
+      - com.miniai.gateway
+
+  tasks:
+    - name: Ensure log directory exists
+      ansible.builtin.file:
+        path: "{{ miniai_dir }}/logs"
+        state: directory
+        mode: "0755"
+
+    - name: Install Python runtime dependencies
+      ansible.builtin.pip:
+        requirements: "{{ miniai_dir }}/requirements.txt"
+
+    - name: Verify AWS bootstrap credential is configured (SSM config source)
+      ansible.builtin.command: aws sts get-caller-identity
+      register: aws_ident
+      changed_when: false
+      failed_when: false
+
+    - name: Warn if AWS credentials are missing (gateway will fall back to defaults)
+      ansible.builtin.debug:
+        msg: >-
+          No AWS credentials found — config will come from built-in defaults,
+          not SSM. Run `terraform apply` in terraform/ then `aws configure`
+          with the miniai-host key (see deploy/SECRETS.md).
+      when: aws_ident.rc != 0
+
+    - name: Render launchd service definitions from templates
+      ansible.builtin.template:
+        src: "{{ item }}.plist.j2"
+        dest: "{{ launch_agents_dir }}/{{ item }}.plist"
+        mode: "0644"
+      loop: "{{ services }}"
+      register: plists
+
+    - name: Bootstrap launchd services (idempotent — ignores already-loaded)
+      ansible.builtin.command: >-
+        launchctl bootstrap gui/{{ ansible_effective_user_id }}
+        {{ launch_agents_dir }}/{{ item }}.plist
+      loop: "{{ services }}"
+      register: bootstrap
+      changed_when: bootstrap.rc == 0
+      failed_when: bootstrap.rc not in [0, 5]   # 5 = already bootstrapped
+
+    - name: Restart services whose definitions changed
+      ansible.builtin.command: >-
+        launchctl kickstart -k gui/{{ ansible_effective_user_id }}/{{ item.item }}
+      loop: "{{ plists.results }}"
+      when: item.changed
+      loop_control:
+        label: "{{ item.item }}"
+
+    # --- observability: native via Homebrew, NOT Docker -----------------------
+    # The Docker VM wires 2-8 GB on macOS; on a 16 GB unified-memory host that
+    # competes with the GPU's working set. Native costs ~300 MB total.
+    # Full sizing analysis: observability/README.md
+    - name: Resolve Homebrew prefix
+      ansible.builtin.command: brew --prefix
+      register: brew_prefix
+      changed_when: false
+
+    - name: Install Prometheus and Grafana natively
+      community.general.homebrew:
+        name: [prometheus, grafana]
+        state: present
+
+    - name: Install Prometheus scrape config
+      ansible.builtin.copy:
+        src: "{{ miniai_dir }}/observability/native/prometheus.yml"
+        dest: "{{ brew_prefix.stdout }}/etc/prometheus.yml"
+        mode: "0644"
+      notify: Restart prometheus
+
+    - name: Ensure Grafana provisioning directories exist
+      ansible.builtin.file:
+        path: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/{{ item }}"
+        state: directory
+        mode: "0755"
+      loop: [datasources, dashboards]
+
+    - name: Install Grafana datasource provisioning
+      ansible.builtin.copy:
+        src: "{{ miniai_dir }}/observability/native/grafana-datasource.yml"
+        dest: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/datasources/prometheus.yml"
+        mode: "0644"
+      notify: Restart grafana
+
+    - name: Install Grafana dashboard provider (path depends on brew prefix)
+      ansible.builtin.copy:
+        content: |
+          apiVersion: 1
+          providers:
+            - name: miniAI
+              folder: ""
+              type: file
+              options:
+                path: {{ brew_prefix.stdout }}/etc/grafana/provisioning/dashboards
+        dest: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/dashboards/dashboards.yml"
+        mode: "0644"
+      notify: Restart grafana
+
+    - name: Install miniAI dashboard
+      ansible.builtin.copy:
+        src: "{{ miniai_dir }}/observability/grafana-provisioning/dashboards/miniai.json"
+        dest: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/dashboards/miniai.json"
+        mode: "0644"
+      notify: Restart grafana
+
+    - name: Ensure Prometheus and Grafana services are running
+      ansible.builtin.command: brew services start {{ item }}
+      loop: [prometheus, grafana]
+      register: svc
+      changed_when: "'Successfully started' in svc.stdout"
+      failed_when: svc.rc != 0 and 'already started' not in (svc.stdout + svc.stderr)
+
+    - name: Wait for the gateway to pass its readiness check
+      ansible.builtin.uri:
+        url: http://localhost:8000/readyz
+        status_code: 200
+      register: ready
+      retries: 30
+      delay: 5
+      until: ready.status == 200
+      ignore_errors: true
+
+    - name: Provisioning summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ 'miniAI is up — gateway ready at http://localhost:8000'
+             if ready.status | default(0) == 200
+             else 'Services installed; gateway not ready yet (model may still be downloading — check logs/mlx-server.log)' }}
+
+  handlers:
+    - name: Restart prometheus
+      ansible.builtin.command: brew services restart prometheus
+
+    - name: Restart grafana
+      ansible.builtin.command: brew services restart grafana

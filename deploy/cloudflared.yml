@@ -1,0 +1,12 @@
+# Cloudflare Tunnel config — outbound-only ingress to the gateway.
+#   cloudflared tunnel run --config deploy/cloudflared.yml miniai
+tunnel: miniai
+credentials-file: ~/.cloudflared/miniai.json
+
+ingress:
+  - hostname: miniai.yourdomain.com
+    service: http://localhost:8000
+  # Optional: expose the Grafana dashboard read-only (anonymous Viewer role)
+  - hostname: grafana.yourdomain.com
+    service: http://localhost:3000
+  - service: http_status:404
