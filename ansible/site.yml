@@ -58,6 +58,14 @@
           with the miniai-host key (see deploy/SECRETS.md).
       when: aws_ident.rc != 0
 
+    # Serve base weights until training produces an adapter. Once
+    # adapters.safetensors exists, the next provision run re-renders the
+    # plist (adds --adapter-path) and kickstarts the service automatically.
+    - name: Check whether the fine-tuned adapter exists yet
+      ansible.builtin.stat:
+        path: "{{ miniai_dir }}/{{ adapter_path }}/adapters.safetensors"
+      register: adapter_stat
+
     - name: Render launchd service definitions from templates
       ansible.builtin.template:
         src: "{{ item }}.plist.j2"

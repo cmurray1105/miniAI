@@ -12,8 +12,10 @@
     <string>server</string>
     <string>--model</string>
     <string>{{ model_repo }}</string>
+{% if adapter_stat.stat.exists %}
     <string>--adapter-path</string>
     <string>{{ adapter_path }}</string>
+{% endif %}
     <string>--host</string>
     <string>127.0.0.1</string>
     <string>--port</string>
