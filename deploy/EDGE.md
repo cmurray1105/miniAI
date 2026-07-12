@@ -4,11 +4,11 @@ Design goals: **zero open inbound ports at home**, TLS everywhere (mandatory —
 `.dev` is HSTS-preloaded), every layer as code, and a bill a job-seeker can
 ignore. Two options were evaluated; the all-AWS path is deployed.
 
-## Option A (deployed): all-AWS — Route 53 + Lightsail bastion + WireGuard, ~$5.50/mo
+## Option A (deployed): all-AWS — Route 53 + EC2 bastion + WireGuard, ~$7.80/mo
 
 ```
 recruiter → Route 53 hosted zone ($0.50/mo)
-          → Lightsail nano static IP (~$5/mo)
+          → EC2 t4g.nano + Elastic IP (~$7.30/mo)
             nginx: Let's Encrypt TLS, edge rate limiting, reverse proxy
           → WireGuard (UDP 51820) ◀── OUTBOUND-only connection from the mini
           → gateway 10.8.0.2:8000 → mlx_lm.server :8080
@@ -17,7 +17,7 @@ recruiter → Route 53 hosted zone ($0.50/mo)
 - The mini's WireGuard client dials **out** to the bastion and holds the
   tunnel open (`PersistentKeepalive`) — the home network exposes nothing.
 - All public attack surface lives on a $5 box that Terraform can rebuild in
-  two minutes (`terraform/lightsail.tf`: instance, static IP, firewall ports,
+  two minutes (`terraform/ec2.tf`: instance, EIP, security group,
   DNS records — the whole edge is code).
 - Owned trade-offs, stated plainly: TLS renewal (certbot systemd timer),
   nginx and OS patching, and DDoS absorption that is one nano instance rather

@@ -1,5 +1,5 @@
 # ALTERNATIVE edge (option B in EDGE.md) — the deployed path is the all-AWS
-# Lightsail bastion in deploy/bastion/. Kept because swapping edges is cheap.
+# EC2 bastion in deploy/bastion/. Kept because swapping edges is cheap.
 #   cloudflared tunnel run --config deploy/cloudflared.yml miniai
 tunnel: miniai
 credentials-file: ~/.cloudflared/miniai.json

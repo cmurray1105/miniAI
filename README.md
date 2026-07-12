@@ -4,7 +4,7 @@
 Qwen3.5-9B into an SRE incident copilot, served publicly behind a real
 gateway — auth, rate limiting, load shedding, Prometheus/Grafana, supervised
 services, CI, and zero open inbound ports. Total cloud compute cost: **$0**.
-Total recurring bill: **~$5.50/month** (Lightsail nano edge bastion + Route 53
+Total recurring bill: **~$7.80/month** (EC2 t4g.nano edge bastion + EIP + Route 53
 hosted zone) plus ~$12/yr for the domain. Every AWS resource is Terraform-managed.
 
 This is not an "AI is magic" demo. It's the full lifecycle you'd run in
@@ -13,7 +13,7 @@ one 16 GB host, with every trade-off written down.
 
 ```
                         ┌────────────────────────── Mac mini (16 GB) ──────────────────────────┐
- recruiter ─▶ Route 53 ─▶ Lightsail bastion ─▶ WireGuard (outbound-only from mini)            │
+ recruiter ─▶ Route 53 ─▶ EC2 bastion ─▶ WireGuard (outbound-only from mini)            │
               (DNS)       (nginx · TLS ·      │                                                │
                            edge rate limit)   │                                                │
                                              ▼                                                 │
@@ -137,7 +137,7 @@ internet. Allowlisted diagnostics only (metrics, disk, logs, DNS, HTTP
 probes, PromQL), no shell, hard cap of 6 tool rounds. The model was also
 *trained* to refuse write actions — and the eval measures it.
 
-**Why a $5 Lightsail bastion instead of an ALB?** An ALB in front of a single
+**Why a ~$7 EC2 nano bastion instead of an ALB?** An ALB in front of a single
 origin is resume theater at 3x the price — and it still can't reach a home
 network. The bastion (nginx TLS + WireGuard, fully Terraform-managed) keeps
 every hop on AWS with zero inbound ports at home. The trade study, including
@@ -167,5 +167,5 @@ tests/        platform tests + dataset invariants (run in CI, no GPU needed)
 ## Stack
 
 MLX / mlx-lm · Qwen3.5-9B (4-bit) · FastAPI · Terraform · Ansible ·
-SSM Parameter Store · Prometheus · Grafana · Route 53 · Lightsail · nginx ·
+SSM Parameter Store · Prometheus · Grafana · Route 53 · EC2 · nginx ·
 WireGuard · launchd · GitHub Actions

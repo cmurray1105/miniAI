@@ -1,8 +1,8 @@
-# AWS edge: Lightsail bastion + WireGuard (the deployed path)
+# AWS edge: EC2 bastion + WireGuard (the deployed path)
 
 ```
 recruiter ─▶ Route 53 (hosted zone, $0.50/mo)
-           ─▶ Lightsail nano static IP (~$5/mo)
+           ─▶ EC2 t4g.nano + Elastic IP (~$7.30/mo)
               nginx: TLS (Let's Encrypt), rate limiting, reverse proxy
            ─▶ WireGuard (UDP 51820) ◀── OUTBOUND connection from the Mac mini
            ─▶ mini gateway 10.8.0.2:8000 / grafana 10.8.0.2:3000
@@ -10,16 +10,23 @@ recruiter ─▶ Route 53 (hosted zone, $0.50/mo)
 
 The mini keeps **zero inbound ports** — its WireGuard client dials out to the
 bastion and keeps the tunnel alive (`PersistentKeepalive`). All public attack
-surface lives on a $5 disposable box that can be rebuilt by Terraform in two
-minutes.
+surface lives on a disposable ~$7/mo box that can be rebuilt by Terraform in
+two minutes (the Elastic IP survives rebuilds, so DNS never moves).
 
 ## One-time setup
 
 ### 1. Provision (from terraform/)
 
 ```bash
-terraform apply        # creates instance, static IP, ports, DNS records
+terraform apply -var "ssh_public_key=$(cat ~/.ssh/id_ed25519.pub)"
 terraform output bastion_public_ip
+```
+
+The `ssh_public_key` var becomes an EC2 key pair, so the bastion trusts the
+key you already have — no console key downloads:
+
+```bash
+ssh ubuntu@$(terraform output -raw bastion_public_ip)
 ```
 
 ### 2. WireGuard keys (generate where each key lives; private keys never move)
@@ -29,7 +36,7 @@ terraform output bastion_public_ip
 brew install wireguard-tools
 wg genkey | tee ~/.wg-mini.key | wg pubkey        # note MINI_PUBKEY
 
-# on the bastion (ssh ubuntu@<bastion_ip>, key from Lightsail console)
+# on the bastion (ssh ubuntu@<bastion_ip>)
 wg genkey | sudo tee /etc/wireguard/server.key | wg pubkey   # note BASTION_PUBKEY
 sudo chmod 600 /etc/wireguard/server.key
 ```
