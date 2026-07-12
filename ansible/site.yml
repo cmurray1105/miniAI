@@ -15,9 +15,12 @@
 
   vars:
     miniai_dir: "{{ playbook_dir | dirname }}"
-    miniai_user: "{{ ansible_user_id }}"
-    python_bin: "{{ ansible_python.executable }}"
-    launch_agents_dir: "{{ ansible_env.HOME }}/Library/LaunchAgents"
+    miniai_user: "{{ ansible_facts['user_id'] }}"
+    # dedicated venv on a modern python — system/CLT python is too old for mlx
+    miniai_venv: "{{ ansible_facts['env']['HOME'] }}/.venvs/miniai"
+    python_bin: "{{ miniai_venv }}/bin/python3"
+    venv_seed_python: /opt/homebrew/bin/python3.14
+    launch_agents_dir: "{{ ansible_facts['env']['HOME'] }}/Library/LaunchAgents"
     model_repo: "mlx-community/Qwen3.5-9B-MLX-4bit"
     adapter_path: "adapters/incident-copilot-v1"
     services:
@@ -31,9 +34,15 @@
         state: directory
         mode: "0755"
 
-    - name: Install Python runtime dependencies
+    - name: Create the miniai virtualenv (idempotent)
+      ansible.builtin.command: "{{ venv_seed_python }} -m venv {{ miniai_venv }}"
+      args:
+        creates: "{{ miniai_venv }}/bin/python3"
+
+    - name: Install Python runtime dependencies into the venv
       ansible.builtin.pip:
         requirements: "{{ miniai_dir }}/requirements.txt"
+        virtualenv: "{{ miniai_venv }}"
 
     - name: Verify AWS bootstrap credential is configured (SSM config source)
       ansible.builtin.command: aws sts get-caller-identity
@@ -59,7 +68,7 @@
 
     - name: Bootstrap launchd services (idempotent — ignores already-loaded)
       ansible.builtin.command: >-
-        launchctl bootstrap gui/{{ ansible_effective_user_id }}
+        launchctl bootstrap gui/{{ ansible_facts['effective_user_id'] }}
         {{ launch_agents_dir }}/{{ item }}.plist
       loop: "{{ services }}"
       register: bootstrap
@@ -68,7 +77,7 @@
 
     - name: Restart services whose definitions changed
       ansible.builtin.command: >-
-        launchctl kickstart -k gui/{{ ansible_effective_user_id }}/{{ item.item }}
+        launchctl kickstart -k gui/{{ ansible_facts['effective_user_id'] }}/{{ item.item }}
       loop: "{{ plists.results }}"
       when: item.changed
       loop_control:

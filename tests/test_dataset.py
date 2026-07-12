@@ -60,7 +60,8 @@ def test_every_tool_call_is_schema_valid(dataset):
                     fn = call["function"]
                     assert fn["name"] in TOOL_NAMES
                     assert fn["name"] in specs, "target tool must be in offered toolset"
-                    args = json.loads(fn["arguments"])  # must parse
+                    args = fn["arguments"]
+                    assert isinstance(args, dict)  # Qwen chat template needs a mapping
                     assert validate_schema(args, specs[fn["name"]])
 
 

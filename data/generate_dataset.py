@@ -307,7 +307,7 @@ def build_tool_example(rng: random.Random, scenario: dict, call_id: str) -> dict
             {"role": "user", "content": scenario["user"]},
             {"role": "assistant", "tool_calls": [{
                 "id": call_id, "type": "function",
-                "function": {"name": scenario["tool"], "arguments": json.dumps(scenario["args"])},
+                "function": {"name": scenario["tool"], "arguments": scenario["args"]},
             }]},
             {"role": "tool", "content": json.dumps(scenario["result"])},
             {"role": "assistant", "content": scenario["answer"]},

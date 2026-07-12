@@ -71,7 +71,7 @@ def run_agent(user_message: str, server: str = MODEL_SERVER,
     for step in range(MAX_STEPS):
         resp = requests.post(
             f"{server}/v1/chat/completions",
-            json={"model": "default", "messages": messages,
+            json={"model": "mlx-community/Qwen3.5-9B-MLX-4bit", "messages": messages,
                   "tools": TOOL_SPECS, "max_tokens": 600, "temperature": 0.2},
             timeout=300,
         )
@@ -99,7 +99,7 @@ def run_agent(user_message: str, server: str = MODEL_SERVER,
         # chat template renders it into what the model saw during training.
         messages.append({"role": "assistant", "tool_calls": [{
             "id": f"call_{step}", "type": "function",
-            "function": {"name": name, "arguments": json.dumps(args)},
+            "function": {"name": name, "arguments": args},
         }]})
         messages.append({"role": "tool", "content": tool_output})
     else:

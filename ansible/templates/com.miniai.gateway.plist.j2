@@ -21,6 +21,13 @@
     <string>8000</string>
   </array>
   <key>WorkingDirectory</key><string>{{ miniai_dir }}</string>
+  <key>EnvironmentVariables</key>
+  <dict>
+    <!-- profile NAME is not a secret; the credential lives in ~/.aws.
+         This lets server/config.py reach SSM when running under launchd. -->
+    <key>AWS_PROFILE</key><string>miniai</string>
+    <key>AWS_REGION</key><string>us-east-1</string>
+  </dict>
   <key>RunAtLoad</key><true/>
   <key>KeepAlive</key><true/>
   <key>StandardOutPath</key><string>{{ miniai_dir }}/logs/gateway.log</string>

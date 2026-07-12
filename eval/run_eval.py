@@ -122,7 +122,7 @@ def run(args: argparse.Namespace) -> None:
     results, t0 = [], time.monotonic()
     for i, case in enumerate(cases):
         payload = {
-            "model": "default",
+            "model": "mlx-community/Qwen3.5-9B-MLX-4bit",
             "messages": [
                 {"role": "system", "content": SYSTEM_PROMPT},
                 {"role": "user", "content": case["user"]},
