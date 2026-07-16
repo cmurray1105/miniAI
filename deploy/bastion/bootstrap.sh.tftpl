@@ -1,0 +1,100 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+# This small cloud-init payload installs a retrying systemd unit. The actual
+# runtime values live in SSM, keeping the AMI reusable and secret-free.
+install -d -m 0755 /usr/local/sbin
+cat >/usr/local/sbin/miniai-bastion-bootstrap <<'SCRIPT'
+#!/usr/bin/env bash
+set -euo pipefail
+
+AWS_REGION="${aws_region}"
+DOMAIN="${domain_name}"
+GRAFANA_DOMAIN="grafana.${domain_name}"
+
+parameter() {
+  aws ssm get-parameter --region "$AWS_REGION" --with-decryption \
+    --name "$1" --query Parameter.Value --output text
+}
+
+# Runtime identity is created before the replacement and is deliberately not
+# echoed. A failed SSM read causes systemd to retry instead of a half-configured
+# public edge.
+wg_private_key="$(parameter /miniai/bastion/wireguard-private-key)"
+mini_public_key="$(parameter /miniai/bastion/mini-wg-public-key)"
+acme_email="$(parameter /miniai/bastion/acme-email)"
+parameter /miniai/bastion/nginx-config >/etc/nginx/sites-available/miniai
+parameter /miniai/bastion/tempo-config >/etc/tempo/tempo.yaml
+
+test -n "$wg_private_key"
+test -n "$mini_public_key"
+test -n "$acme_email"
+
+install -d -m 0700 /etc/wireguard
+umask 077
+printf '%s\n' "$wg_private_key" >/etc/wireguard/server.key
+cat >/etc/wireguard/wg0.conf <<EOF
+[Interface]
+Address = 10.8.0.1/24
+ListenPort = 51820
+PrivateKey = $wg_private_key
+
+[Peer]
+# the Mac mini
+PublicKey = $mini_public_key
+AllowedIPs = 10.8.0.2/32
+EOF
+chmod 600 /etc/wireguard/wg0.conf /etc/wireguard/server.key
+
+rm -f /etc/nginx/sites-enabled/default
+ln -sfn /etc/nginx/sites-available/miniai /etc/nginx/sites-enabled/miniai
+nginx -t
+systemctl enable --now wg-quick@wg0
+systemctl reload nginx
+systemctl enable --now tempo
+
+# Terraform attaches the EIP and creates both Route 53 records after the EC2
+# instance. Do not ask Let's Encrypt until public DNS points at this exact box.
+metadata_token="$(curl --fail --silent --show-error --request PUT \
+  --header 'X-aws-ec2-metadata-token-ttl-seconds: 60' \
+  http://169.254.169.254/latest/api/token)"
+public_ipv4="$(curl --fail --silent --show-error \
+  --header "X-aws-ec2-metadata-token: $metadata_token" \
+  http://169.254.169.254/latest/meta-data/public-ipv4)"
+
+for attempt in $(seq 1 60); do
+  apex_ipv4="$(dig +short A "$DOMAIN" | head -n 1)"
+  grafana_ipv4="$(dig +short A "$GRAFANA_DOMAIN" | head -n 1)"
+  if [ "$apex_ipv4" = "$public_ipv4" ] && [ "$grafana_ipv4" = "$public_ipv4" ]; then
+    break
+  fi
+  if [ "$attempt" = 60 ]; then
+    echo "DNS does not yet resolve to this bastion EIP; retrying later." >&2
+    exit 1
+  fi
+  sleep 10
+done
+
+certbot --nginx --non-interactive --agree-tos --email "$acme_email" \
+  -d "$DOMAIN" -d "$GRAFANA_DOMAIN"
+SCRIPT
+chmod 0755 /usr/local/sbin/miniai-bastion-bootstrap
+
+cat >/etc/systemd/system/miniai-bastion-bootstrap.service <<'UNIT'
+[Unit]
+Description=Configure miniAI edge runtime from SSM
+Wants=network-online.target
+After=network-online.target cloud-final.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/miniai-bastion-bootstrap
+Restart=on-failure
+RestartSec=30
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+UNIT
+systemctl daemon-reload
+systemctl enable --now miniai-bastion-bootstrap.service

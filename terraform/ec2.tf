@@ -106,6 +106,36 @@ resource "aws_iam_instance_profile" "bastion_ssm" {
   role  = aws_iam_role.bastion_ssm[0].name
 }
 
+data "aws_iam_policy_document" "bastion_runtime_read" {
+  statement {
+    sid = "ReadBastionRuntimeParameters"
+    actions = [
+      "ssm:GetParameter",
+    ]
+    resources = [
+      "arn:aws:ssm:${var.aws_region}:${data.aws_caller_identity.current.account_id}:parameter/miniai/bastion/*",
+    ]
+  }
+
+  statement {
+    sid       = "DecryptBastionRuntimeParameters"
+    actions   = ["kms:Decrypt"]
+    resources = ["*"]
+    condition {
+      test     = "StringEquals"
+      variable = "kms:ViaService"
+      values   = ["ssm.${var.aws_region}.amazonaws.com"]
+    }
+  }
+}
+
+resource "aws_iam_role_policy" "bastion_runtime_read" {
+  count  = var.domain_name != "" ? 1 : 0
+  name   = "miniai-bastion-runtime-read"
+  role   = aws_iam_role.bastion_ssm[0].id
+  policy = data.aws_iam_policy_document.bastion_runtime_read.json
+}
+
 resource "aws_security_group" "bastion" {
   count       = var.domain_name != "" ? 1 : 0
   name        = "miniai-bastion"
@@ -173,13 +203,13 @@ resource "aws_instance" "bastion" {
   # domain-specific nginx configuration are deliberately runtime state: baking
   # any of them into an AMI would clone secrets to every future instance.
   user_data = <<-EOT
-    #!/bin/bash
-    set -euo pipefail
-    sysctl -w net.ipv4.ip_forward=1
-    echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-wireguard.conf
+    ${templatefile("${path.module}/../deploy/bastion/bootstrap.sh.tftpl", {
+  aws_region  = var.aws_region
+  domain_name = var.domain_name
+})}
   EOT
 
-  tags = { Name = "miniai-bastion" }
+tags = { Name = "miniai-bastion" }
 }
 
 # Elastic IP: free while attached to a running instance; the IPv4 itself is

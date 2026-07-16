@@ -35,9 +35,27 @@ use_packer_bastion_ami = true
 Terraform then selects the newest self-owned `miniai-bastion-*` ARM64 AMI.
 Packer never bakes WireGuard private keys, TLS certificates, DNS hostnames, or
 nginx vhosts: those are runtime configuration and copying them into an image
-would duplicate secrets. A replacement does require re-establishing that
-runtime identity (or, in a next iteration, retrieving encrypted configuration
-from SSM at boot).
+would duplicate secrets. On first boot, cloud-init fetches the runtime config
+from SSM, configures WireGuard/nginx/Tempo, waits for Route 53 to resolve to
+the attached EIP, and obtains the Let's Encrypt certificate automatically.
+
+Before the first replacement, migrate the identity from the live bastion. This
+is a one-time operation and does not print the private key:
+
+```bash
+./deploy/bastion/migrate-runtime-identity.sh
+```
+
+If your EC2 key is not your default SSH identity, specify it without exposing
+the key material:
+
+```bash
+SSH_IDENTITY_FILE=~/.ssh/id_ed25519 ./deploy/bastion/migrate-runtime-identity.sh
+```
+
+Then `terraform apply` can replace the instance. The EIP remains stable and
+the existing Mini WireGuard peer continues to work because its server identity
+is preserved in SSM.
 
 ## Access: Systems Manager, not more SSH
 
