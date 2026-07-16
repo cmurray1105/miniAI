@@ -27,8 +27,15 @@ gh auth login -h github.com
 ```
 
 It downloads the current official ARM64 runner, creates a runner scoped to
-`cmurray1105/miniAI` with the `miniai` label, and installs its per-user
-launchd service. It refuses to overwrite an existing runner.
+`cmurray1105/miniAI` named `miniai-mac-mini`, with the `miniai` label, and
+installs its per-user launchd service. To repair a partial installation or
+reconcile a stale GitHub registration automatically, run the same command with
+`--replace`; it removes only that named runner in this repository and its local
+runner directory before recreating it.
+
+```bash
+./deploy/install-github-runner.sh --replace
+```
 
 Equivalent manual setup, if you prefer GitHub's generated commands:
 
