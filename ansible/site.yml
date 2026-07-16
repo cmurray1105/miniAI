@@ -113,8 +113,8 @@
       notify: Restart prometheus
 
     - name: Install Grafana reverse-proxy settings
-      ansible.builtin.copy:
-        src: "{{ miniai_dir }}/observability/native/grafana.ini"
+      ansible.builtin.template:
+        src: grafana.ini.j2
         dest: "{{ brew_prefix.stdout }}/etc/grafana/grafana.ini"
         mode: "0644"
       notify: Restart grafana

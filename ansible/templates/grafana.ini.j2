@@ -1,7 +1,11 @@
 ; Grafana runs locally on the Mac mini, but browsers reach it through the
-; HTTPS nginx reverse proxy on the EC2 bastion. Without this canonical public
-; URL Grafana can generate localhost/HTTP asset URLs and show its generic
-; "failed to load application files" page.
+; HTTPS nginx reverse proxy on the EC2 bastion.
+[paths]
+; Homebrew's service does not infer this from the custom config file. Keep the
+; provisioning location explicit so datasource/dashboard files installed by
+; Ansible are actually scanned at Grafana startup.
+provisioning = {{ brew_prefix.stdout }}/etc/grafana/provisioning
+
 [server]
 domain = grafana.mini-agent.dev
 root_url = https://grafana.mini-agent.dev/
