@@ -33,11 +33,11 @@ jobs:
     env:
       AWS_REGION: ${{ inputs.aws_region || 'us-east-1' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - uses: hashicorp/setup-packer@v3
 
-      - uses: aws-actions/configure-aws-credentials@v4
+      - uses: aws-actions/configure-aws-credentials@v6
         with:
           role-to-assume: ${{ vars.AWS_PACKER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
