@@ -27,13 +27,26 @@ if [ -n "$SSH_IDENTITY_FILE" ]; then
   ssh_options+=(-i "$SSH_IDENTITY_FILE" -o IdentitiesOnly=yes)
 fi
 
+echo "Reading existing WireGuard identity from the bastion..."
 ssh "${ssh_options[@]}" "$BASTION_SSH" 'sudo cat /etc/wireguard/server.key' >"$tmpdir/wireguard-private-key"
-mini_public_key="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^[[:space:]]*PublicKey[[:space:]]*=[[:space:]]*//p' /etc/wireguard/wg0.conf | head -n 1")"
-acme_email="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^email = //p' /etc/letsencrypt/renewal/*.conf | head -n 1")"
+test -s "$tmpdir/wireguard-private-key" || {
+  echo "Bastion returned an empty WireGuard private key." >&2
+  exit 1
+}
 
-test -s "$tmpdir/wireguard-private-key"
-test -n "$mini_public_key"
-test -n "$acme_email"
+echo "Reading the Mini peer public key..."
+mini_public_key="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^[[:space:]]*PublicKey[[:space:]]*=[[:space:]]*//p' /etc/wireguard/wg0.conf | head -n 1")"
+test -n "$mini_public_key" || {
+  echo "Could not find a PublicKey entry in /etc/wireguard/wg0.conf." >&2
+  exit 1
+}
+
+echo "Reading the existing Certbot contact..."
+acme_email="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^email = //p' /etc/letsencrypt/renewal/*.conf | head -n 1")"
+test -n "$acme_email" || {
+  echo "Could not find an email entry in /etc/letsencrypt/renewal/*.conf." >&2
+  exit 1
+}
 
 aws ssm put-parameter --region "$AWS_REGION" --overwrite --type SecureString \
   --name /miniai/bastion/wireguard-private-key \
