@@ -8,9 +8,10 @@
   <key>Label</key><string>com.miniai.gateway</string>
   <key>ProgramArguments</key>
   <array>
-    <string>{{ python_bin }}</string>
-    <string>-m</string>
-    <string>uvicorn</string>
+    <!-- Use the venv console script directly. This avoids launchd resolving a
+         Homebrew/Ansible Python that happens to have a global uvicorn module
+         but not miniAI's OpenTelemetry runtime dependencies. -->
+    <string>{{ miniai_venv }}/bin/uvicorn</string>
     <string>server.gateway:app</string>
     <string>--host</string>
     <!-- 0.0.0.0 so the bastion can reach us over the WireGuard interface
