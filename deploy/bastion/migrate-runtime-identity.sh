@@ -21,8 +21,8 @@ if [ -n "$SSH_IDENTITY_FILE" ]; then
 fi
 
 ssh "${ssh_options[@]}" "$BASTION_SSH" 'sudo cat /etc/wireguard/server.key' >"$tmpdir/wireguard-private-key"
-mini_public_key="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo awk '/^PublicKey[[:space:]]*=/{print \\$3; exit}' /etc/wireguard/wg0.conf")"
-acme_email="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo awk -F' = ' '/^email =/{print \\$2; exit}' /etc/letsencrypt/renewal/*.conf")"
+mini_public_key="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^[[:space:]]*PublicKey[[:space:]]*=[[:space:]]*//p' /etc/wireguard/wg0.conf | head -n 1")"
+acme_email="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^email = //p' /etc/letsencrypt/renewal/*.conf | head -n 1")"
 
 test -s "$tmpdir/wireguard-private-key"
 test -n "$mini_public_key"
