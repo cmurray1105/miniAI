@@ -209,6 +209,13 @@ resource "aws_instance" "bastion" {
 })}
   EOT
 
+# Cloud-init consumes user-data once, at first boot. Updating this field on
+# an already-running instance does not replay the bootstrap but can restart
+# the host. New AMI replacements still receive the current rendered script.
+lifecycle {
+  ignore_changes = [user_data]
+}
+
 tags = { Name = "miniai-bastion" }
 }
 
