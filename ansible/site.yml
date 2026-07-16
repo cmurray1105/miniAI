@@ -112,6 +112,13 @@
         mode: "0644"
       notify: Restart prometheus
 
+    - name: Install Grafana reverse-proxy settings
+      ansible.builtin.copy:
+        src: "{{ miniai_dir }}/observability/native/grafana.ini"
+        dest: "{{ brew_prefix.stdout }}/etc/grafana/grafana.ini"
+        mode: "0644"
+      notify: Restart grafana
+
     - name: Ensure Grafana provisioning directories exist
       ansible.builtin.file:
         path: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/{{ item }}"

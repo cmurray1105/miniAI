@@ -69,6 +69,23 @@ sudo nginx -t && sudo systemctl reload nginx
 sudo certbot --nginx -d mini-agent.dev -d grafana.mini-agent.dev
 ```
 
+Grafana is served from a dedicated subdomain, not a URL subpath. Before
+visiting it externally, apply the host configuration so Grafana knows its
+canonical HTTPS URL and restarts with the reverse-proxy settings:
+
+```bash
+ansible-playbook ansible/site.yml
+```
+
+Then open `https://grafana.mini-agent.dev/`. If Grafana has already been
+provisioned, rerunning the playbook is safe and only restarts Grafana when its
+configuration changes.
+
+Grafana uses a separate nginx rate-limit zone from the model gateway. A
+browser dashboard load requests many JavaScript and CSS chunks concurrently;
+applying the gateway's 30 requests/minute limit to those assets causes nginx
+to return 503 and Grafana to report a missing chunk.
+
 certbot auto-renews via systemd timer. `.dev` is HSTS-preloaded, so the
 https-only redirect nginx sets up isn't optional — it's load-bearing.
 
