@@ -93,16 +93,19 @@ demo.
 ## How it's deployed
 
 No orchestrator — deliberately. One host, launchd as the supervisor, and a
-deploy script with a health gate:
+GitHub Actions deployment that converges the host with a health gate:
 
 - **Services:** everything is launchd-supervised — the model server and
   gateway as templated agents (`ansible/templates/`), Prometheus/Grafana
   native via `brew services` (launchd underneath). No Docker on this host:
   the macOS container VM wires 2-8 GB that unified memory can't spare from
   the GPU — the sizing analysis is in `observability/README.md`.
-- **Code rollout:** `./deploy/deploy.sh` = pull → pip install → pytest (the
-  deploy gate) → `launchctl kickstart` both services → poll `/readyz` for 150 s.
-  Fails loud with rollback instructions if the health gate doesn't pass.
+- **Code rollout:** PRs run CI on a GitHub-hosted runner. A green push to
+  `main` is then serialized onto the Mac mini's self-hosted runner: fast-forward
+  the standing checkout, run the idempotent Ansible playbook, and poll
+  `/healthz` for 150 seconds. This makes the automated path the same
+  convergence path used for a manual recovery; details and runner setup are in
+  `deploy/CICD.md`.
 - **Model rollout:** adapters are versioned artifacts (`adapters/incident-copilot-v1`).
   A new fine-tune is v2; rollout = point the plist at v2 and kickstart; rollback
   = point back at v1. Adapters are ~20 MB, so keeping every version is free.
@@ -114,9 +117,11 @@ deploy script with a health gate:
 - **Config & secrets:** ALL runtime config comes from SSM Parameter Store at
   startup — nothing tunable hides in plists or env files. Changing a value is
   a reviewed `terraform apply` + restart. See `deploy/SECRETS.md`.
-- **CI:** GitHub Actions lints, runs the platform tests, and regenerates +
-  validates the dataset on every push (`.github/workflows/ci.yml`). Training
-  itself stays on the mini — MLX needs Apple Silicon.
+- **CI/CD:** GitHub Actions lints, tests, regenerates + validates the dataset,
+  validates Terraform without state or AWS credentials, and syntax-checks
+  Ansible (`.github/workflows/cicd.yml`). CD is guarded by an explicit
+  repository variable and runs only after a push to `main`; training itself
+  stays on the mini — MLX needs Apple Silicon.
 
 ## Design decisions an interviewer might ask about
 

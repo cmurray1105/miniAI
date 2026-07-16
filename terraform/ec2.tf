@@ -33,6 +33,29 @@ data "aws_ssm_parameter" "ubuntu_ami" {
   name = "/aws/service/canonical/ubuntu/server/24.04/stable/current/arm64/hvm/ebs-gp3/ami-id"
 }
 
+# Packer creates a hardened, package-ready replacement AMI. Keeping the
+# Canonical image as the default makes a first bootstrap simple; setting
+# use_packer_bastion_ami after the first image build makes replacement hosts
+# immutable from the OS package layer upward.
+data "aws_ami" "miniai_bastion" {
+  count       = var.use_packer_bastion_ami ? 1 : 0
+  most_recent = true
+  owners      = ["self"]
+
+  filter {
+    name   = "name"
+    values = ["miniai-bastion-*"]
+  }
+  filter {
+    name   = "architecture"
+    values = ["arm64"]
+  }
+  filter {
+    name   = "state"
+    values = ["available"]
+  }
+}
+
 data "aws_vpc" "default" {
   default = true
 }
@@ -97,7 +120,7 @@ resource "aws_security_group" "bastion" {
 resource "aws_instance" "bastion" {
   count = var.domain_name != "" ? 1 : 0
 
-  ami                    = data.aws_ssm_parameter.ubuntu_ami.value
+  ami                    = var.use_packer_bastion_ami ? data.aws_ami.miniai_bastion[0].id : data.aws_ssm_parameter.ubuntu_ami.value
   instance_type          = var.bastion_instance_type
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.bastion[0].id]
@@ -112,14 +135,12 @@ resource "aws_instance" "bastion" {
     http_tokens = "required" # IMDSv2 only
   }
 
-  # Bootstrap: packages only. WireGuard keys and TLS certs are interactive
-  # one-time steps documented in deploy/bastion/BASTION.md — private keys
-  # do not belong in Terraform state or user_data.
+  # The base image is package-ready. WireGuard keys, certificate material, and
+  # domain-specific nginx configuration are deliberately runtime state: baking
+  # any of them into an AMI would clone secrets to every future instance.
   user_data = <<-EOT
     #!/bin/bash
     set -euo pipefail
-    apt-get update
-    DEBIAN_FRONTEND=noninteractive apt-get install -y nginx wireguard certbot python3-certbot-nginx
     sysctl -w net.ipv4.ip_forward=1
     echo 'net.ipv4.ip_forward=1' > /etc/sysctl.d/99-wireguard.conf
   EOT

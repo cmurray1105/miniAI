@@ -37,3 +37,9 @@ variable "domain_name" {
   type        = string
   default     = "mini-agent.dev"
 }
+
+variable "use_packer_bastion_ami" {
+  description = "Use the newest self-owned miniai-bastion-* AMI built by Packer instead of Canonical's stock Ubuntu AMI"
+  type        = bool
+  default     = false
+}

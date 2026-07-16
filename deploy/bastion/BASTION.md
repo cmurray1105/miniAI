@@ -10,8 +10,34 @@ recruiter ─▶ Route 53 (hosted zone, $0.50/mo)
 
 The mini keeps **zero inbound ports** — its WireGuard client dials out to the
 bastion and keeps the tunnel alive (`PersistentKeepalive`). All public attack
-surface lives on a disposable ~$7/mo box that can be rebuilt by Terraform in
-two minutes (the Elastic IP survives rebuilds, so DNS never moves).
+surface lives on a disposable ~$7/mo box. The image is built by Packer and
+Terraform attaches the durable Elastic IP, so a replacement retains DNS.
+
+## Immutable-image path
+
+This is deliberately **EC2, not ECS**. One ARM instance with a fixed network
+identity, nginx, WireGuard, and a local trace store does not gain meaningful
+availability from an ECS control plane; it does gain cost and deployment
+surface. Packer bakes the repeatable OS layer (packages, forwarding, unattended
+updates) into an ARM64 AMI. Terraform remains the owner of the instance,
+security group, and EIP.
+
+Build the image from GitHub Actions by running **Build bastion AMI**. Its
+`infrastructure` environment must contain an OIDC-backed
+`AWS_PACKER_ROLE_ARN` secret; no AWS access key is stored in GitHub. The job
+produces an AMI named `miniai-bastion-*`. After the first successful build,
+set this in the Terraform invocation or tfvars:
+
+```hcl
+use_packer_bastion_ami = true
+```
+
+Terraform then selects the newest self-owned `miniai-bastion-*` ARM64 AMI.
+Packer never bakes WireGuard private keys, TLS certificates, DNS hostnames, or
+nginx vhosts: those are runtime configuration and copying them into an image
+would duplicate secrets. A replacement does require re-establishing that
+runtime identity (or, in a next iteration, retrieving encrypted configuration
+from SSM at boot).
 
 ## One-time setup
 

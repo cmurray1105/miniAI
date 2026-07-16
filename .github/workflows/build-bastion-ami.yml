@@ -1,0 +1,41 @@
+name: Build bastion AMI
+
+on:
+  workflow_dispatch:
+    inputs:
+      aws_region:
+        description: AWS region in which to build the ARM64 AMI
+        required: true
+        default: us-east-1
+        type: string
+
+permissions:
+  contents: read
+  id-token: write
+
+jobs:
+  build:
+    name: Build immutable edge image
+    # Configure this Environment with required reviewers and an OIDC role named
+    # AWS_PACKER_ROLE_ARN. No long-lived AWS key is stored in GitHub.
+    environment: infrastructure
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: hashicorp/setup-packer@v3
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_PACKER_ROLE_ARN }}
+          aws-region: ${{ inputs.aws_region }}
+
+      - name: Initialize and validate image definition
+        working-directory: packer
+        run: |
+          packer init bastion.pkr.hcl
+          packer validate -var "aws_region=${{ inputs.aws_region }}" bastion.pkr.hcl
+
+      - name: Build image
+        working-directory: packer
+        run: packer build -var "aws_region=${{ inputs.aws_region }}" bastion.pkr.hcl

@@ -9,3 +9,10 @@ pydantic>=2.8
 httpx>=0.27          # fastapi TestClient
 pytest>=8.0
 ruff>=0.6
+# Keep the test environment import-compatible with server.telemetry. CI does
+# not export traces, but it must exercise the same instrumentation imports.
+opentelemetry-api>=1.39
+opentelemetry-sdk>=1.39
+opentelemetry-exporter-otlp-proto-grpc>=1.39
+opentelemetry-instrumentation-fastapi>=0.60b1
+opentelemetry-instrumentation-requests>=0.60b1
