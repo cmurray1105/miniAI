@@ -16,6 +16,14 @@ resource "aws_ssm_parameter" "bastion_runtime" {
   name  = "/miniai/bastion/${each.key}"
   type  = "String"
   value = each.value
+
+  # Explicit as well as provider-default tags: this parameter was initially
+  # created by the one-time migration script and is imported into state later.
+  # Explicit tags prevent import reconciliation from stripping provenance.
+  tags = {
+    ManagedBy = "terraform"
+    Project   = "miniAI"
+  }
 }
 
 # The initial value was populated by the one-time runtime-identity migration.
