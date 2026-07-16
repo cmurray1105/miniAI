@@ -126,6 +126,12 @@
         mode: "0755"
       loop: [datasources, dashboards]
 
+    - name: Ensure Grafana managed dashboard directory exists
+      ansible.builtin.file:
+        path: "{{ brew_prefix.stdout }}/var/lib/grafana/dashboards"
+        state: directory
+        mode: "0755"
+
     - name: Install Grafana datasource provisioning
       ansible.builtin.copy:
         src: "{{ miniai_dir }}/observability/native/grafana-datasource.yml"
@@ -141,8 +147,10 @@
             - name: miniAI
               folder: ""
               type: file
+              updateIntervalSeconds: 10
+              allowUiUpdates: false
               options:
-                path: {{ brew_prefix.stdout }}/etc/grafana/provisioning/dashboards
+                path: {{ brew_prefix.stdout }}/var/lib/grafana/dashboards
         dest: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/dashboards/dashboards.yml"
         mode: "0644"
       notify: Restart grafana
@@ -150,7 +158,7 @@
     - name: Install miniAI dashboard
       ansible.builtin.copy:
         src: "{{ miniai_dir }}/observability/grafana-provisioning/dashboards/miniai.json"
-        dest: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/dashboards/miniai.json"
+        dest: "{{ brew_prefix.stdout }}/var/lib/grafana/dashboards/miniai.json"
         mode: "0644"
       notify: Restart grafana
 
