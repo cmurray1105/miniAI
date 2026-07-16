@@ -102,7 +102,7 @@
 
     - name: Install Prometheus and Grafana natively
       community.general.homebrew:
-        name: [prometheus, grafana]
+        name: [prometheus, grafana, grafana-alloy]
         state: present
 
     - name: Install Prometheus scrape config
@@ -139,6 +139,20 @@
         mode: "0644"
       notify: Restart grafana
 
+    - name: Install Tempo datasource
+      ansible.builtin.copy:
+        src: "{{ miniai_dir }}/observability/grafana-provisioning/datasources/tempo.yml"
+        dest: "{{ brew_prefix.stdout }}/etc/grafana/provisioning/datasources/tempo.yml"
+        mode: "0644"
+      notify: Restart grafana
+
+    - name: Install Alloy trace pipeline
+      ansible.builtin.template:
+        src: config.alloy.j2
+        dest: "{{ brew_prefix.stdout }}/etc/alloy/config.alloy"
+        mode: "0644"
+      notify: Restart alloy
+
     - name: Install Grafana dashboard provider (path depends on brew prefix)
       ansible.builtin.copy:
         content: |
@@ -164,7 +178,7 @@
 
     - name: Ensure Prometheus and Grafana services are running
       ansible.builtin.command: brew services start {{ item }}
-      loop: [prometheus, grafana]
+      loop: [prometheus, grafana, grafana-alloy]
       register: svc
       changed_when: "'Successfully started' in svc.stdout"
       failed_when: svc.rc != 0 and 'already started' not in (svc.stdout + svc.stderr)
@@ -192,3 +206,6 @@
 
     - name: Restart grafana
       ansible.builtin.command: brew services restart grafana
+
+    - name: Restart alloy
+      ansible.builtin.command: brew services restart grafana-alloy

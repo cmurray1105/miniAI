@@ -1,0 +1,15 @@
+otelcol.receiver.otlp "miniai" {
+  grpc { endpoint = "127.0.0.1:4317" }
+  output { traces = [otelcol.processor.batch.miniai.input] }
+}
+
+otelcol.processor.batch "miniai" {
+  output { traces = [otelcol.exporter.otlp.tempo.input] }
+}
+
+otelcol.exporter.otlp "tempo" {
+  client {
+    endpoint = "10.8.0.1:4317"
+    tls { insecure = true }
+  }
+}

@@ -29,9 +29,12 @@ from fastapi.responses import FileResponse, PlainTextResponse
 from prometheus_client import (CONTENT_TYPE_LATEST, Counter, Gauge, Histogram,
                                generate_latest)
 from pydantic import BaseModel, Field
+from opentelemetry import trace
 
 from agent.agent import MODEL_SERVER, run_agent
+from game.night_shift import choose as choose_shift, start as start_shift
 from server.config import get_demo_token, load_config
+from server.telemetry import configure_tracing
 
 # --- config -------------------------------------------------------------------
 # ALL config comes from SSM Parameter Store (Terraform-managed), resolved once
@@ -55,6 +58,8 @@ QUEUE_DEPTH = Gauge("gateway_queue_depth", "Requests waiting or running")
 TOOL_CALLS = Counter("gateway_tool_calls_total", "Agent tool calls", ["tool"])
 
 app = FastAPI(title="miniAI gateway", docs_url=None, redoc_url=None)
+configure_tracing(app)
+tracer = trace.get_tracer("miniai.gateway")
 
 _inference_lock = asyncio.Semaphore(1)   # one model, one request at a time
 _queued = 0
@@ -117,6 +122,19 @@ async def stats() -> dict:
             "rate_limit_per_min": RATE_LIMIT_PER_MIN}
 
 
+@app.post("/api/night-shift/start")
+async def night_shift_start() -> dict:
+    return start_shift()
+
+
+@app.post("/api/night-shift/{shift_id}/choose/{choice_id}")
+async def night_shift_choose(shift_id: str, choice_id: int) -> dict:
+    try:
+        return choose_shift(shift_id, choice_id)
+    except (KeyError, ValueError) as exc:
+        raise HTTPException(status_code=404, detail=str(exc)) from exc
+
+
 @app.post("/api/chat")
 async def chat(body: ChatRequest, request: Request) -> dict:
     global _queued
@@ -142,12 +160,19 @@ async def chat(body: ChatRequest, request: Request) -> dict:
     t0 = time.monotonic()
     try:
         try:
-            await asyncio.wait_for(_inference_lock.acquire(), timeout=QUEUE_TIMEOUT_S)
+            with tracer.start_as_current_span("gateway.queue_wait") as span:
+                span.set_attribute("gateway.queue.depth_at_arrival", _queued)
+                await asyncio.wait_for(_inference_lock.acquire(), timeout=QUEUE_TIMEOUT_S)
         except (TimeoutError, asyncio.TimeoutError):
             REQUESTS.labels(status="503").inc()
             raise HTTPException(status_code=503, detail="queue wait timed out")
         try:
-            result = await anyio.to_thread.run_sync(run_agent, body.message)
+            with tracer.start_as_current_span("gateway.agent_run") as span:
+                # Do not record prompt content, IP address, auth, or tool output.
+                span.set_attribute("gen_ai.prompt.length", len(body.message))
+                result = await anyio.to_thread.run_sync(run_agent, body.message)
+                span.set_attribute("gen_ai.usage.completion_tokens", result.completion_tokens)
+                span.set_attribute("agent.steps", result.steps)
         finally:
             _inference_lock.release()
     except HTTPException:

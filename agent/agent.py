@@ -16,12 +16,14 @@ import time
 from dataclasses import dataclass, field
 
 import requests
+from opentelemetry import trace
 
 from .prompts import SYSTEM_PROMPT
 from .tools import TOOL_SPECS, execute_tool
 
 MODEL_SERVER = "http://localhost:8080"
 MAX_STEPS = 6  # hard cap on tool-call rounds — no runaway loops
+tracer = trace.get_tracer("miniai.agent")
 
 
 @dataclass
@@ -69,12 +71,15 @@ def run_agent(user_message: str, server: str = MODEL_SERVER,
     t_start = time.monotonic()
 
     for step in range(MAX_STEPS):
-        resp = requests.post(
-            f"{server}/v1/chat/completions",
-            json={"model": "mlx-community/Qwen3.5-9B-MLX-4bit", "messages": messages,
-                  "tools": TOOL_SPECS, "max_tokens": 600, "temperature": 0.2},
-            timeout=300,
-        )
+        with tracer.start_as_current_span("agent.model_completion") as span:
+            span.set_attribute("gen_ai.request.model", "Qwen3.5-9B-MLX-4bit")
+            span.set_attribute("agent.step", step + 1)
+            resp = requests.post(
+                f"{server}/v1/chat/completions",
+                json={"model": "mlx-community/Qwen3.5-9B-MLX-4bit", "messages": messages,
+                      "tools": TOOL_SPECS, "max_tokens": 600, "temperature": 0.2},
+                timeout=300,
+            )
         resp.raise_for_status()
         data = resp.json()
         message = data["choices"][0]["message"]
@@ -89,7 +94,9 @@ def run_agent(user_message: str, server: str = MODEL_SERVER,
 
         name, args = call
         t_tool = time.monotonic()
-        tool_output = execute_tool(name, args)
+        with tracer.start_as_current_span("agent.tool") as span:
+            span.set_attribute("agent.tool.name", name)
+            tool_output = execute_tool(name, args)
         result.trace.append({
             "type": "tool_call", "tool": name, "arguments": args,
             "result": json.loads(tool_output),
