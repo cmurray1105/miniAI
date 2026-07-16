@@ -17,12 +17,11 @@ resource "aws_ssm_parameter" "bastion_runtime" {
   type  = "String"
   value = each.value
 
-  # Explicit as well as provider-default tags: this parameter was initially
-  # created by the one-time migration script and is imported into state later.
-  # Explicit tags prevent import reconciliation from stripping provenance.
-  tags = {
-    ManagedBy = "terraform"
-    Project   = "miniAI"
+  # Created parameters inherit the provider default tags. The ACME value is
+  # imported after a one-time migration, and AWS provider default-tag handling
+  # can otherwise present a perpetual cosmetic diff on imported SSM params.
+  lifecycle {
+    ignore_changes = [tags, tags_all]
   }
 }
 
