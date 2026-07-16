@@ -16,6 +16,13 @@ RUNNER_NAME="${RUNNER_NAME:-miniai-mac-mini}"
 RUNNER_LABELS="${RUNNER_LABELS:-miniai}"
 REPLACE=false
 
+# The runner's macOS service wrapper derives this launchd label from the
+# repository and runner name. Keep the calculation here so --replace can clean
+# a partially-created plist even if svc.sh itself failed halfway through.
+SERVICE_LABEL="actions.runner.${REPOSITORY//\//-}.${RUNNER_NAME// /_}"
+SERVICE_PLIST="$HOME/Library/LaunchAgents/$SERVICE_LABEL.plist"
+SERVICE_LOG_DIR="$HOME/Library/Logs/$SERVICE_LABEL"
+
 case "${1:-}" in
   "") ;;
   --replace) REPLACE=true ;;
@@ -56,6 +63,11 @@ if [[ -e "$RUNNER_DIR" || -n "$runner_id" ]]; then
     "$RUNNER_DIR/svc.sh" stop >/dev/null 2>&1 || true
     "$RUNNER_DIR/svc.sh" uninstall >/dev/null 2>&1 || true
   fi
+  # svc.sh can leave a plist behind when a prior install stopped midway.
+  # Explicitly unload and remove only this runner's known launchd artifacts.
+  launchctl bootout "gui/$(id -u)" "$SERVICE_PLIST" >/dev/null 2>&1 || true
+  rm -f "$SERVICE_PLIST"
+  rm -rf "$SERVICE_LOG_DIR"
   if [[ -n "$runner_id" ]]; then
     gh api --method DELETE "repos/$REPOSITORY/actions/runners/$runner_id" >/dev/null
   fi
