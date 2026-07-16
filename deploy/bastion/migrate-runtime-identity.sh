@@ -12,8 +12,15 @@ tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 umask 077
 
-command -v aws >/dev/null
-command -v ssh >/dev/null
+require() {
+  command -v "$1" >/dev/null || {
+    echo "Missing required command: $1" >&2
+    exit 1
+  }
+}
+
+require aws
+require ssh
 
 ssh_options=(-o BatchMode=yes)
 if [ -n "$SSH_IDENTITY_FILE" ]; then

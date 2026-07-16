@@ -100,9 +100,9 @@
       register: brew_prefix
       changed_when: false
 
-    - name: Install Prometheus and Grafana natively
+    - name: Install local operational tooling natively
       community.general.homebrew:
-        name: [prometheus, grafana, grafana-alloy]
+        name: [awscli, prometheus, grafana, grafana-alloy]
         state: present
 
     - name: Install Prometheus scrape config
