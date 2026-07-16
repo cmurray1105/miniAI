@@ -40,7 +40,7 @@ The service survives reboots. The underlying commands are:
 
 ```
 cd ~/actions-runner
-./svc.sh install
+./svc.sh install    # run as cmurray; do not use sudo on macOS
 ./svc.sh start
 ```
 

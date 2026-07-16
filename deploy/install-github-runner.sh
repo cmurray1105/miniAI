@@ -52,8 +52,10 @@ cd "$RUNNER_DIR"
   --labels "$RUNNER_LABELS" \
   --work "_work"
 
-# GitHub's service wrapper creates a per-user launchd service on macOS.
-sudo ./svc.sh install "$(id -un)"
-sudo ./svc.sh start
+# GitHub's macOS service wrapper creates a per-user launchd service. It
+# explicitly rejects sudo: the runner must run as the same unprivileged user
+# that owns the checkout and Homebrew services.
+./svc.sh install
+./svc.sh start
 
 echo "Runner installed. Confirm the labels in GitHub: Settings → Actions → Runners."
