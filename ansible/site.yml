@@ -83,9 +83,22 @@
       changed_when: bootstrap.rc == 0
       failed_when: bootstrap.rc not in [0, 5]   # 5 = already bootstrapped
 
-    - name: Restart services whose definitions changed
+    # `launchctl kickstart` restarts the already-loaded job definition; it does
+    # not reread a plist whose contents changed. Unload and bootstrap changed
+    # definitions so a new venv path, environment variable, or command is
+    # actually adopted by launchd.
+    - name: Unload services whose definitions changed
       ansible.builtin.command: >-
-        launchctl kickstart -k gui/{{ ansible_facts['effective_user_id'] }}/{{ item.item }}
+        launchctl bootout gui/{{ ansible_facts['effective_user_id'] }}/{{ item.item }}
+      loop: "{{ plists.results }}"
+      when: item.changed
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Bootstrap changed service definitions
+      ansible.builtin.command: >-
+        launchctl bootstrap gui/{{ ansible_facts['effective_user_id'] }}
+        {{ launch_agents_dir }}/{{ item.item }}.plist
       loop: "{{ plists.results }}"
       when: item.changed
       loop_control:
