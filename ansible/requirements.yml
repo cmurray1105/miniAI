@@ -1,0 +1,6 @@
+---
+collections:
+  # Provides community.general.homebrew, used only when the playbook executes
+  # on the Mac mini. CI installs it so syntax validation matches production.
+  - name: community.general
+    version: ">=10.0.0,<12.0.0"

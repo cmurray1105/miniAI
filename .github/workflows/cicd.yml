@@ -33,6 +33,9 @@ jobs:
       - name: Install Python checks
         run: pip install -r requirements-dev.txt ansible-core
 
+      - name: Install Ansible collections used by the playbook
+        run: ansible-galaxy collection install -r ansible/requirements.yml
+
       - name: Lint
         run: ruff check .
 
