@@ -1,6 +1,7 @@
 __pycache__/
 *.pyc
 .venv/
+.terraform/
 adapters/
 fused_model/
 logs/*.log
