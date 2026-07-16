@@ -1,6 +1,4 @@
 {
-  "dashboard": {
-  "id": null,
   "title": "miniAI — LLM platform on a Mac mini",
   "uid": "miniAI",
   "timezone": "browser",
@@ -39,9 +37,5 @@
       "targets": [{ "expr": "rate(gateway_tool_calls_total[5m]) * 60", "legendFormat": "{{tool}}" }]
     }
   ],
-  "schemaVersion": 39,
-  "version": 0
-  },
-  "folderUid": "",
-  "overwrite": true
+  "schemaVersion": 39
 }
