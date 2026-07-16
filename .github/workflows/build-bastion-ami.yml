@@ -1,6 +1,12 @@
 name: Build bastion AMI
 
 on:
+  push:
+    branches: [main]
+    paths:
+      - "packer/**"
+      - "deploy/bastion/**"
+      - ".github/workflows/build-bastion-ami.yml"
   workflow_dispatch:
     inputs:
       aws_region:
@@ -13,6 +19,10 @@ permissions:
   contents: read
   id-token: write
 
+concurrency:
+  group: build-miniai-bastion-ami
+  cancel-in-progress: false
+
 jobs:
   build:
     name: Build immutable edge image
@@ -20,6 +30,8 @@ jobs:
     # AWS_PACKER_ROLE_ARN. No long-lived AWS key is stored in GitHub.
     environment: infrastructure
     runs-on: ubuntu-latest
+    env:
+      AWS_REGION: ${{ inputs.aws_region || 'us-east-1' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -28,14 +40,18 @@ jobs:
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           role-to-assume: ${{ secrets.AWS_PACKER_ROLE_ARN }}
-          aws-region: ${{ inputs.aws_region }}
+          aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize and validate image definition
         working-directory: packer
         run: |
           packer init bastion.pkr.hcl
-          packer validate -var "aws_region=${{ inputs.aws_region }}" bastion.pkr.hcl
+          packer validate -var "aws_region=${{ env.AWS_REGION }}" bastion.pkr.hcl
 
       - name: Build image
         working-directory: packer
-        run: packer build -var "aws_region=${{ inputs.aws_region }}" bastion.pkr.hcl
+        run: >-
+          packer build
+          -var "aws_region=${{ env.AWS_REGION }}"
+          -var "ami_name_prefix=miniai-bastion-${{ github.sha }}"
+          bastion.pkr.hcl

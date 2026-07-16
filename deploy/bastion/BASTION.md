@@ -22,10 +22,12 @@ surface. Packer bakes the repeatable OS layer (packages, forwarding, unattended
 updates) into an ARM64 AMI. Terraform remains the owner of the instance,
 security group, and EIP.
 
-Build the image from GitHub Actions by running **Build bastion AMI**. Its
-`infrastructure` environment must contain an OIDC-backed
-`AWS_PACKER_ROLE_ARN` secret; no AWS access key is stored in GitHub. The job
-produces an AMI named `miniai-bastion-*`. After the first successful build,
+GitHub Actions builds the image automatically when `packer/`,
+`deploy/bastion/`, or its AMI workflow changes on `main`; **Build bastion AMI**
+also supports a deliberate manual rebuild. Its `infrastructure` environment
+must contain an OIDC-backed `AWS_PACKER_ROLE_ARN` secret; no AWS access key is
+stored in GitHub. The job produces an AMI named `miniai-bastion-*`. After the
+first successful build,
 set this in the Terraform invocation or tfvars:
 
 ```hcl
