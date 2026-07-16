@@ -73,6 +73,39 @@ resource "aws_key_pair" "bastion" {
   public_key = var.ssh_public_key
 }
 
+# Ubuntu's official AMI already contains the SSM Agent. The instance profile,
+# not a package install, is what lets it register with Systems Manager and
+# enables audited Session Manager access without opening SSH.
+data "aws_iam_policy" "ssm_managed_instance_core" {
+  arn = "arn:aws:iam::aws:policy/AmazonSSMManagedInstanceCore"
+}
+
+resource "aws_iam_role" "bastion_ssm" {
+  count = var.domain_name != "" ? 1 : 0
+  name  = "miniai-bastion-ssm"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect    = "Allow"
+      Principal = { Service = "ec2.amazonaws.com" }
+      Action    = "sts:AssumeRole"
+    }]
+  })
+}
+
+resource "aws_iam_role_policy_attachment" "bastion_ssm" {
+  count      = var.domain_name != "" ? 1 : 0
+  role       = aws_iam_role.bastion_ssm[0].name
+  policy_arn = data.aws_iam_policy.ssm_managed_instance_core.arn
+}
+
+resource "aws_iam_instance_profile" "bastion_ssm" {
+  count = var.domain_name != "" ? 1 : 0
+  name  = "miniai-bastion-ssm"
+  role  = aws_iam_role.bastion_ssm[0].name
+}
+
 resource "aws_security_group" "bastion" {
   count       = var.domain_name != "" ? 1 : 0
   name        = "miniai-bastion"
@@ -125,6 +158,7 @@ resource "aws_instance" "bastion" {
   subnet_id              = data.aws_subnets.default.ids[0]
   vpc_security_group_ids = [aws_security_group.bastion[0].id]
   key_name               = var.ssh_public_key != "" ? aws_key_pair.bastion[0].key_name : null
+  iam_instance_profile   = aws_iam_instance_profile.bastion_ssm[0].name
 
   root_block_device {
     volume_type = "gp3"

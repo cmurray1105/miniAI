@@ -47,6 +47,6 @@ build {
   sources = ["source.amazon-ebs.bastion"]
 
   provisioner "shell" {
-    script = "scripts/bootstrap-bastion.sh"
+    script = "${path.root}/scripts/bootstrap-bastion.sh"
   }
 }

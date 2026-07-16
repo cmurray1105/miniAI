@@ -39,6 +39,15 @@ would duplicate secrets. A replacement does require re-establishing that
 runtime identity (or, in a next iteration, retrieving encrypted configuration
 from SSM at boot).
 
+## Access: Systems Manager, not more SSH
+
+The Ubuntu source AMI already includes the SSM Agent. Terraform attaches an
+EC2 instance profile with AWS's `AmazonSSMManagedInstanceCore` policy, so the
+agent can register after launch. No separate agent install is required. Once
+the host appears in Systems Manager, use Session Manager for audited shell
+access; SSH remains available only as the bootstrap break-glass path and can
+later be removed from the security group.
+
 ## One-time setup
 
 ### 1. Provision (from terraform/)

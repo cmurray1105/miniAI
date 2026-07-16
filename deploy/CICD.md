@@ -13,11 +13,30 @@ deploy script to drift out of sync.
 
 ## One-time runner setup (on the mini)
 
-1. GitHub repo → Settings → Actions → Runners → **New self-hosted runner**
-   → macOS / ARM64. Follow the download/config commands it prints. When
-   `config.sh` asks for labels, add `miniai`.
+1. Sign in to GitHub CLI on the mini (one-time; the account needs repo admin
+   permission to create a short-lived runner-registration token):
 
-2. Install it as a service so it survives reboots:
+```
+gh auth login -h github.com
+```
+
+2. Run the automated installer from the repository checkout:
+
+```
+./deploy/install-github-runner.sh
+```
+
+It downloads the current official ARM64 runner, creates a runner scoped to
+`cmurray1105/miniAI` with the `miniai` label, and installs its per-user
+launchd service. It refuses to overwrite an existing runner.
+
+Equivalent manual setup, if you prefer GitHub's generated commands:
+
+```text
+GitHub repo → Settings → Actions → Runners → New self-hosted runner → macOS / ARM64
+```
+
+The service survives reboots. The underlying commands are:
 
 ```
 cd ~/actions-runner
