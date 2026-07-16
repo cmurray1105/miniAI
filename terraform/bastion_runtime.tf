@@ -6,6 +6,7 @@ locals {
   bastion_runtime_parameters = {
     "nginx-config" = file("${path.module}/../deploy/bastion/nginx-miniai.conf")
     "tempo-config" = file("${path.module}/../deploy/bastion/tempo.yaml")
+    "acme-email"   = var.acme_email
   }
 }
 
@@ -15,4 +16,11 @@ resource "aws_ssm_parameter" "bastion_runtime" {
   name  = "/miniai/bastion/${each.key}"
   type  = "String"
   value = each.value
+}
+
+# The initial value was populated by the one-time runtime-identity migration.
+# Import it into Terraform state so all future values are managed declaratively.
+import {
+  to = aws_ssm_parameter.bastion_runtime["acme-email"]
+  id = "/miniai/bastion/acme-email"
 }

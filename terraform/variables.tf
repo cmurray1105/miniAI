@@ -43,3 +43,9 @@ variable "use_packer_bastion_ami" {
   type        = bool
   default     = false
 }
+
+variable "acme_email" {
+  description = "Contact address for Let's Encrypt registration and expiration notices"
+  type        = string
+  default     = ""
+}
