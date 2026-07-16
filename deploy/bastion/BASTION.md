@@ -53,6 +53,14 @@ the key material:
 SSH_IDENTITY_FILE=~/.ssh/id_ed25519 ./deploy/bastion/migrate-runtime-identity.sh
 ```
 
+If the legacy certificate has no recorded contact email, supply the address to
+receive Let's Encrypt expiration notices:
+
+```bash
+ACME_EMAIL=you@example.com SSH_IDENTITY_FILE=~/.ssh/id_ed25519 \
+  ./deploy/bastion/migrate-runtime-identity.sh
+```
+
 Then `terraform apply` can replace the instance. The EIP remains stable and
 the existing Mini WireGuard peer continues to work because its server identity
 is preserved in SSM.

@@ -8,6 +8,7 @@ set -euo pipefail
 BASTION_SSH="${BASTION_SSH:-ubuntu@34.205.40.23}"
 AWS_REGION="${AWS_REGION:-us-east-1}"
 SSH_IDENTITY_FILE="${SSH_IDENTITY_FILE:-}"
+ACME_EMAIL="${ACME_EMAIL:-}"
 tmpdir="$(mktemp -d)"
 trap 'rm -rf "$tmpdir"' EXIT
 umask 077
@@ -41,10 +42,15 @@ test -n "$mini_public_key" || {
   exit 1
 }
 
-echo "Reading the existing Certbot contact..."
-acme_email="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^email = //p' /etc/letsencrypt/renewal/*.conf | head -n 1")"
+if [ -n "$ACME_EMAIL" ]; then
+  acme_email="$ACME_EMAIL"
+  echo "Using the supplied Certbot contact email..."
+else
+  echo "Reading the existing Certbot contact..."
+  acme_email="$(ssh "${ssh_options[@]}" "$BASTION_SSH" "sudo sed -n 's/^email = //p' /etc/letsencrypt/renewal/*.conf | head -n 1")"
+fi
 test -n "$acme_email" || {
-  echo "Could not find an email entry in /etc/letsencrypt/renewal/*.conf." >&2
+  echo "Could not find a Certbot contact email. Re-run with ACME_EMAIL=you@example.com." >&2
   exit 1
 }
 
