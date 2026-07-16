@@ -24,10 +24,17 @@ security group, and EIP.
 
 GitHub Actions builds the image automatically when `packer/`,
 `deploy/bastion/`, or its AMI workflow changes on `main`; **Build bastion AMI**
-also supports a deliberate manual rebuild. Its `infrastructure` environment
-must contain an OIDC-backed `AWS_PACKER_ROLE_ARN` secret; no AWS access key is
-stored in GitHub. The job produces an AMI named `miniai-bastion-*`. After the
-first successful build,
+also supports a deliberate manual rebuild. Terraform creates the narrowly
+scoped OIDC role. Apply it once, then set its output as the non-secret
+`AWS_PACKER_ROLE_ARN` variable in GitHub's `infrastructure` environment (the
+role ARN is an identifier, not a credential):
+
+```bash
+terraform output -raw github_packer_role_arn
+```
+
+No AWS access key is stored in GitHub. The job produces an AMI named
+`miniai-bastion-*`. After the first successful build,
 set this in the Terraform invocation or tfvars:
 
 ```hcl

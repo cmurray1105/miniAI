@@ -19,3 +19,8 @@ output "config_parameter_path" {
 output "route53_zone_name_servers" {
   value = var.domain_name != "" ? data.aws_route53_zone.main[0].name_servers : []
 }
+
+output "github_packer_role_arn" {
+  description = "Set this as the AWS_PACKER_ROLE_ARN GitHub Environment variable for infrastructure"
+  value       = aws_iam_role.github_packer.arn
+}

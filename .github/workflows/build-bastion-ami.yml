@@ -26,8 +26,8 @@ concurrency:
 jobs:
   build:
     name: Build immutable edge image
-    # Configure this Environment with required reviewers and an OIDC role named
-    # AWS_PACKER_ROLE_ARN. No long-lived AWS key is stored in GitHub.
+    # Configure this Environment with required reviewers and an OIDC role ARN
+    # in the AWS_PACKER_ROLE_ARN variable. No long-lived AWS key is stored in GitHub.
     environment: infrastructure
     runs-on: ubuntu-latest
     env:
@@ -39,7 +39,7 @@ jobs:
 
       - uses: aws-actions/configure-aws-credentials@v4
         with:
-          role-to-assume: ${{ secrets.AWS_PACKER_ROLE_ARN }}
+          role-to-assume: ${{ vars.AWS_PACKER_ROLE_ARN }}
           aws-region: ${{ env.AWS_REGION }}
 
       - name: Initialize and validate image definition
